@@ -3,21 +3,24 @@ from typing import Any, Dict, Union
 import torch
 from packaging import version
 from torch import nn
-
-from transformers import (
-    Trainer,
-    is_apex_available,
-)
+from transformers import Trainer, is_apex_available, TrainingArguments
 
 if is_apex_available():
     from apex import amp
 
 if version.parse(torch.__version__) >= version.parse("1.6"):
     _is_native_amp_available = True
-    from torch.cuda.amp import autocast
+    from torch.cuda.amp import autocast, GradScaler
+else:
+    _is_native_amp_available = False
 
 
 class CTCTrainer(Trainer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_amp = _is_native_amp_available and self.args.fp16
+        self.scaler = GradScaler() if self.use_amp else None
+
     def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
         """
         Perform a training step on a batch of inputs.
